@@ -1,6 +1,6 @@
 {application, wamp_service,
  [{description, "Basic wamp abstract service"},
-  {vsn, "0.5.0"},
+  {vsn, "0.6.0"},
   {registered, []},
   {mod, {wamp_service_app, []}},
   {applications,
@@ -9,8 +9,8 @@
     sasl,
     lager,
     jsx,
+    jsone,
     msgpack,
-    pbkdf2,
     wamper,
     awre,
     backoff

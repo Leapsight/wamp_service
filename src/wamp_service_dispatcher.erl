@@ -141,12 +141,12 @@ handle_invocation({invocation, RequestId, RegistrationId, Details, Args, ArgsKw}
         handle_result(Conn, RequestId, Details, Res, ArgsKw)
     catch
         throw:not_found -> % do not log not found errors
-            handle_invocation_error(Conn, RequestId, Handler, throw, not_found);
-        Class:Reason ->
+            handle_invocation_error(Conn, RequestId, Handler, throw, not_found, none);
+        Class:Reason:Stacktrace ->
             Args1 = obfuscate_pass(Args),
             lager:error("handle invocation class=~p reason=~p call handler=~p args=~p args_kw=~p stacktrace=~p",
-                        [Class, Reason, Handler, Args1, ArgsKw, erlang:get_stacktrace()]),
-            handle_invocation_error(Conn, RequestId, Handler, Class, Reason)
+                        [Class, Reason, Handler, Args1, ArgsKw, Stacktrace]),
+            handle_invocation_error(Conn, RequestId, Handler, Class, Reason, Stacktrace)
     end.
 
 %% @private
@@ -159,9 +159,9 @@ handle_event({event, SubscriptionId, PublicationId, _Details, Args, ArgsKw},
         exec_callback(Handler, wamp_service_utils:args(Args) ++ [wamp_service_utils:options(ArgsKw)])
     catch
         %% @TODO review error handling and URIs
-        Class:Reason ->
+        Class:Reason:Stacktrace ->
             _ = lager:error("Error ~p:~p subscription handler=~p args=~p args_kw=~p stacktrace=~p",
-                            [Class, Reason, Handler, Args, ArgsKw, erlang:get_stacktrace()])
+                            [Class, Reason, Handler, Args, ArgsKw, Stacktrace])
     end.
 
 %% @private
@@ -178,31 +178,31 @@ handle_result(Conn, RequestId, Details, Res, ArgsKw) ->
     end.
 
 %% @private
-handle_invocation_error(Conn, RequestId, Handler, Class, Reason) ->
+handle_invocation_error(Conn, RequestId, Handler, Class, Reason, Stacktrace) ->
     case {Class, Reason} of
         %% @TODO review error handling and URIs
         {throw, unauthorized} ->
             Error = #{code => unauthorized, message => _(<<"Unauthorized user.">>),
                       description => _(<<"The user does not have the required permissions to access the resource.">>)},
-            awre:error(Conn, RequestId, Error, <<"wamp.error.unauthorized">>);
+            awre:error(Conn, RequestId, Error, <<"wamp.error.unauthorized">>, [], #{});
         {throw, not_found} ->
             Error = #{code => not_found, message => _(<<"Resource not found.">>),
                       description => _(<<"The resource you are trying to retrieve does not exist.">>)},
-            awre:error(Conn, RequestId, Error, <<"com.magenta.error.not_found">>);
+            awre:error(Conn, RequestId, Error, <<"com.magenta.error.not_found">>, [], #{});
         {_, {error, Key, Error}} ->
-            awre:error(Conn, RequestId, Error, Key);
+            awre:error(Conn, RequestId, Error, Key, [], #{});
         {error, #{code := authorization_error} = Error} ->
-            awre:error(Conn, RequestId, Error, <<"wamp.error.not_authorized">>);
+            awre:error(Conn, RequestId, Error, <<"wamp.error.not_authorized">>, [], #{});
         {error, #{code := service_error} = Error} ->
-            awre:error(Conn, RequestId, Error, <<"com.magenta.error.internal_error">>);
+            awre:error(Conn, RequestId, Error, <<"com.magenta.error.internal_error">>, [], #{});
         {error, #{code := _} = Error} ->
-            awre:error(Conn, RequestId, Error, <<"wamp.error.invalid_argument">>);
-        {Class, Reason} ->
+            awre:error(Conn, RequestId, Error, <<"wamp.error.invalid_argument">>, [], #{});
+        {Class, Reason, Stacktrace} ->
             _ = lager:error("handle invocation error: handler=~p, class=~p, reason=~p, stack=~p",
-                            [Handler, Class, Reason, erlang:get_stacktrace()]),
-            Error = #{code => internal_error, message => _(<<"Internal error.">>),
+                            [Handler, Class, Reason, Stacktrace]),
+            Error = #{code => internal_error, message => _(<<"Internal error.">>, [], #{}),
                       description => _(<<"There was an internal error, please contact the administrator.">>)},
-            awre:error(Conn, RequestId, Error, <<"com.magenta.error.internal_error">>)
+            awre:error(Conn, RequestId, Error, <<"com.magenta.error.internal_error">>, [], #{})
     end.
 
 exec_callback({Mod, Fun}, Args) ->
@@ -324,9 +324,9 @@ do_connect(State) ->
         State2 = register_callbacks(State1),
         {ok, State2}
     catch
-        Class:Reason ->
+        Class:Reason:Stacktrace ->
             _ = lager:error("Connection error class=~p reason=~p stacktarce=~p",
-                            [Class, Reason, erlang:get_stacktrace()]),
+                            [Class, Reason, Stacktrace]),
             {error, Class}
     end.
 

@@ -106,8 +106,8 @@ do_call({call, Uri, Args, ArgsKw, Timeout}, From, #{conn := Conn})
                 Res = awre:call(Conn, [{timeout, Timeout}], Uri, Args, ArgsKw1, Timeout + 50),
                 gen_server:reply(From, Res)
             catch
-                Class:Reason ->
-                    handle_call_error(Class, Reason, Uri, Args, ArgsKw1)
+                Class:Reason:Stacktrace ->
+                    handle_call_error(Class, Reason, Stacktrace, Uri, Args, ArgsKw1)
             end
           end).
 
@@ -129,9 +129,9 @@ do_publish2({publish2, Topic, Opts, Args, KWArgs}, #{conn := Conn}) ->
     ).
 
 
-handle_call_error(Class, Reason, Uri, Args, Opts) ->
+handle_call_error(Class, Reason, Stacktrace, Uri, Args, Opts) ->
     _ = lager:error("handle call class=~p, reason=~p, uri=~p,  args=~p, args_kw=~p, stacktrace=~p",
-                    [Class, Reason, Uri, Args, Opts, erlang:get_stacktrace()]),
+                    [Class, Reason, Uri, Args, Opts, Stacktrace]),
     case {Class, Reason} of
         {exit, {timeout, _}} ->
             Details = #{code => timeout, message => _(<<"Service timeout.">>),
@@ -171,9 +171,9 @@ do_connect(State) ->
                         attempts => 1, cbackoff => Backoff},
         {ok, State1}
     catch
-        Class:Reason ->
+        Class:Reason:Stacktrace ->
             _ = lager:error("Connection error class=~p reason=~p stacktarce=~p",
-                            [Class, Reason, erlang:get_stacktrace()]),
+                            [Class, Reason, Stacktrace]),
             {error, Class}
     end.
 
